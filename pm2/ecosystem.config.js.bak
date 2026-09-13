@@ -149,38 +149,6 @@ const apps = [
       "127.0.0.1"
     ],
     "interpreter": "node"
-  },
-  {
-    // The gym runner's phone preview: master's /train needs the training API
-    // (migrations 348/349), which the shared :8080 server predates. Read-only
-    // boot — schedulers and workers are off in server/.env.local so this can
-    // never double-fire the mail, Telegram or outreach that :8080 owns.
-    "name": "hub-train-api",
-    "script": "C:/Users/oscar/Projects/vacso-hub-master-preview/node_modules/tsx/dist/cli.mjs",
-    "cwd": "C:/Users/oscar/Projects/vacso-hub-master-preview/server",
-    "windowsHide": true,
-    "autorestart": true,
-    "max_restarts": 10,
-    "restart_delay": 5000,
-    "args": ["src/server.ts"],
-    "interpreter": "node"
-  },
-  {
-    // Served to the phone over tailscale serve on https://vacsoserver…:3080.
-    "name": "hub-train-web",
-    "script": "C:/Users/oscar/Projects/vacso-hub-master-preview/node_modules/vite/bin/vite.js",
-    "cwd": "C:/Users/oscar/Projects/vacso-hub-master-preview/client",
-    "windowsHide": true,
-    "autorestart": true,
-    "max_restarts": 10,
-    "restart_delay": 5000,
-    // Loopback ONLY, matching hub-client. tailscaled already listens on
-    // :3080 for the serve mapping, so binding 0.0.0.0 here collides with it
-    // and Vite crash-loops on EADDRINUSE. tailscale serve proxies to
-    // 127.0.0.1:3080, so loopback is both sufficient and the safer bind.
-    "args": ["--port", "3080", "--strictPort", "--host", "127.0.0.1"],
-    "env": { "VITE_API_URL": "http://127.0.0.1:8096/api" },
-    "interpreter": "node"
   }
 ];
 
