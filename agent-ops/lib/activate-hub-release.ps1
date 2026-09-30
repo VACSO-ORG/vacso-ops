@@ -22,6 +22,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Remove-Item Env:NODE_ENV -ErrorAction SilentlyContinue   # npm ci must install devDependencies (vite)
+# Windows bsdtar first: when launched from Git Bash, GNU tar leads PATH and reads 'C:\...' as a remote host.
+$env:PATH = "$env:SystemRoot\System32;" + $env:PATH
 
 $S12  = $NewSha.Substring(0,12)
 $B    = 'C:\Users\oscar\AppData\Local\VACSO\recovery\reboot-activation-plan-20260923'
@@ -69,7 +71,16 @@ $prevCompose = $prevActive.compose
 if (-not (Test-Path -LiteralPath $prevCompose)) { throw 'Previous active compose file is missing; R1 would be impossible' }
 if ($prevActive.sourceHead -eq $NewSha) { throw 'NewSha is already the active release' }
 if (Test-Path -LiteralPath $CAND) { throw "Candidate folder already exists: $CAND (preserve it and inspect)" }
-foreach ($p in @($DEPS, $CLIENT_RECEIPT, "$B\image-build-$S12", "$B\$BACKUP.json")) { if (Test-Path -LiteralPath $p) { throw "Already exists, preserve and inspect: $p" } }
+# Leftovers from an earlier attempt that failed before step 5 (no candidate, nothing live changed) are kept,
+# renamed with a .failed-<time> suffix, so a retry can start clean. A dump receipt is never moved.
+if (Test-Path -LiteralPath "$B\$BACKUP.json") { throw "DB dump receipt already exists, preserve and inspect: $B\$BACKUP.json" }
+$stamp = Get-Date -Format yyyyMMddHHmmss
+foreach ($p in @($DEPS, $CLIENT_RECEIPT, "$B\image-build-$S12")) {
+  if (Test-Path -LiteralPath $p) {
+    if ($Execute) { Rename-Item -LiteralPath $p -NewName ((Split-Path $p -Leaf) + ".failed-$stamp") }
+    Write-Host "Earlier failed attempt left $p; it will be kept as .failed-$stamp"
+  }
+}
 $REL = 'C:\Users\oscar\projects\vacso-hub-release-' + (Get-Date -Format yyyyMMdd)
 foreach ($suffix in @('','-b','-c','-d','-e','-f','-g','-h','-i','-j','-k','-l')) { if (-not (Test-Path -LiteralPath ($REL + $suffix))) { $REL = $REL + $suffix; break } }
 if (Test-Path -LiteralPath $REL) { throw 'No free release checkout name for today' }
