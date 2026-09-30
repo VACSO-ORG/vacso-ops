@@ -54,7 +54,13 @@ function Invoke-PinnedNode([string[]]$argv, [string]$what) {
 function Get-Json([string]$url) { Invoke-RestMethod -Uri $url -TimeoutSec 5 }
 
 # ---------- preconditions (read-only) ----------
-foreach ($f in @('build-release-client.v3.cjs','prepare-release.v4.cjs','reviewed-env.v4.cjs','activate-frontend.v3.cjs','verify-candidate.v4.cjs','finalize-activation.v4.cjs','install-release-dependencies.ps1','build-final-images.cjs','backup-runtime.cjs')) {
+# Image builder: the newest pinned build-final-images[.vN].cjs. Each lockfile change ships a new builder with a
+# rebuilt base image (see build-final-images.v2.README.md); older builders refuse newer lockfiles.
+$BUILDER = Get-ChildItem -LiteralPath $B -File | Where-Object { $_.Name -match '^build-final-images(\.v(\d+))?\.cjs$' } |
+  Sort-Object { if ($_.Name -match '\.v(\d+)\.cjs$') { [int]$Matches[1] } else { 1 } } -Descending | Select-Object -First 1
+if (-not $BUILDER) { throw 'No build-final-images*.cjs in the pinned tooling' }
+$BUILDER = $BUILDER.FullName
+foreach ($f in @('build-release-client.v3.cjs','prepare-release.v4.cjs','reviewed-env.v4.cjs','activate-frontend.v3.cjs','verify-candidate.v4.cjs','finalize-activation.v4.cjs','install-release-dependencies.ps1','backup-runtime.cjs')) {
   if (-not (Test-Path -LiteralPath (Join-Path $B $f))) { throw "Missing tooling: $f" }
 }
 if (-not (Test-Path -LiteralPath $NODE)) { throw 'Pinned Node 24.19.0 is missing' }
@@ -69,7 +75,7 @@ foreach ($suffix in @('','-b','-c','-d','-e','-f','-g','-h','-i','-j','-k','-l')
 if (Test-Path -LiteralPath $REL) { throw 'No free release checkout name for today' }
 foreach ($v in $ENV_CHANGES) { if ($v -match '=dotenv:(.+):[A-Z0-9_]+$' -and -not (Test-Path -LiteralPath $Matches[1])) { throw "Env source file missing: $($Matches[1])" } }
 
-Say ("Plan: NEWSHA=$NewSha REL=$REL CAND=$CAND previous=" + $prevActive.sourceHead)
+Say ("Plan: NEWSHA=$NewSha REL=$REL CAND=$CAND previous=" + $prevActive.sourceHead + " builder=" + (Split-Path $BUILDER -Leaf))
 if ($ENV_CHANGES.Count -gt 0) {
   $shown = for ($i = 0; $i -lt $ENV_CHANGES.Count; $i += 2) { $ENV_CHANGES[$i] + ' ' + ($ENV_CHANGES[$i+1] -replace '=(dotenv|pm2|container):.*$','=<from $1 source>') }
   Say ('Reviewed env changes (values never printed): ' + ($shown -join '; '))
@@ -93,7 +99,8 @@ try {
   Invoke-PinnedNode @("$B\build-release-client.v3.cjs",'--verify',$CLIENT_RECEIPT) 'Client build verification'
 
   Say 'Step 3: backend + MCP images'
-  Invoke-PinnedNode @("$B\build-final-images.cjs",$REL,$NewSha) 'Image build'
+  Say "Image builder: $BUILDER"
+  Invoke-PinnedNode @($BUILDER,$REL,$NewSha) 'Image build'
 
   Say 'Step 4: fresh DB dump'
   Invoke-PinnedNode @("$B\backup-runtime.cjs",$BACKUP) 'DB backup'

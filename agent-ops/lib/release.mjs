@@ -53,7 +53,13 @@ try {
   console.log(`Gates passed: ${sha} is master, PR #${ci.pr} required checks green (${ci.required.join(', ')}).`);
   console.log(env ? `Env changes: ${env.spec.id} (${env.spec.changes.length} entries, ${env.spec.reason ?? 'no reason given'})` : 'Env changes: none');
 
-  if (execute) release = acquireLock('hub-release', 3 * 60 * 60 * 1000);
+  if (execute) {
+    // Other sessions release with their own drivers (activate-prod-frontend.vN.ps1); never run alongside one.
+    const others = run('powershell', ['-NoProfile', '-Command',
+      "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'activate-prod-frontend|build-final-images|prepare-release|activate-frontend|finalize-activation' -and $_.CommandLine -notmatch 'Get-CimInstance' } | ForEach-Object { $_.ProcessId }"]);
+    if (others) throw new Error(`another release is running (pids ${others.split(/\s+/).join(', ')}); wait for it to finish`);
+    release = acquireLock('hub-release', 3 * 60 * 60 * 1000);
+  }
   const psArgs = ['-NoProfile', '-File', path.join(OPS_ROOT, 'agent-ops', 'lib', 'activate-hub-release.ps1'), '-NewSha', sha];
   if (env) psArgs.push('-EnvChangesFile', env.file);
   if (execute) psArgs.push('-Execute');
