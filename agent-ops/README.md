@@ -10,6 +10,7 @@ Each tool carries its own safety gates, so the permission rule can allow exactly
 | `release-hub.ps1 --sha master [--execute]` | Releases current vacso-hub master to the local runtime (images, fresh DB dump, compose, built frontend, finalize, checks) | sha == origin/master; merged PR's required checks all green; one release at a time; reviewed env changes applied once; automatic rollback on step 7/8 failure |
 | `deploy-bridge.cjs --sha master [--execute]` | Moves PM2 `claude-bridge` (:3939) to a commit | commit on master; bridge tests pass; keeps running env/cwd/interpreter; `/health` must be 200 or it rolls back |
 | `wt-unlock.mjs [--execute]` | Clears a stale `.git/wt-registry.lock` | owner PID dead, same host, lock older than 5 min |
+| `retire-worktrees.mjs [--execute] [--dead-dirs]` | Removes finished worktrees across the repos; with `--dead-dirs`, also folders left without `.git` | never main checkouts, runtime/release checkouts, anything PM2/Docker/a process uses, or anything touched in 24h; must be clean with every commit on the default branch; node_modules junctions unlinked first; branches kept; dead folders salvaged (minus node_modules/build output) to `%LOCALAPPDATA%\VACSO\agent-ops\retired\` before deletion |
 | `merge-when-green.sh <owner/repo> <pr>` | Merges when required checks pass, updating the branch when master moves | never `--admin`; stops on failed checks or conflicts |
 
 Every tool defaults to a dry run, refuses to run when `agent-ops/` differs from `origin/main` (an agent
@@ -31,6 +32,7 @@ Bash(powershell.exe -NoProfile -File C:/Users/oscar/Projects/vacso-ops/agent-ops
 Bash(node C:/Users/oscar/Projects/vacso-ops/agent-ops/deploy-bridge.cjs:*)
 Bash(node C:/Users/oscar/Projects/vacso-ops/agent-ops/wt-unlock.mjs:*)
 Bash(bash C:/Users/oscar/Projects/vacso-ops/agent-ops/merge-when-green.sh:*)
+Bash(node C:/Users/oscar/Projects/vacso-ops/agent-ops/retire-worktrees.mjs:*)
 ```
 
 Pinned release tooling lives in `%LOCALAPPDATA%\VACSO\recovery\reboot-activation-plan-20260923` and is never edited.
