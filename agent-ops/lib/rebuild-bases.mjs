@@ -148,10 +148,14 @@ function rebuildBase(entry, sha) {
   refuseIfExists(ctx);
   refuseIfExists(recipe);
 
-  // FROM by repository digest, which Docker resolves from the local store and
-  // which a retagged image cannot satisfy. `FROM sha256:<id>` is read by Docker
-  // as a Docker Hub repository called "sha256" (first run, 8 Oct 2026).
-  const fromRef = `${base.repo}@${pinnedId}`;
+  // FROM a local tag that resolves to the pinned id, checked here just before
+  // the build. BuildKit cannot FROM a bare id (`FROM sha256:<id>` is read as a
+  // Docker Hub repository called "sha256") nor a local repo@digest (it goes to
+  // the registry for it); both were tried on 8 Oct 2026. The tag is the
+  // builder's handle; the id check is what keeps a retagged image out.
+  const tags = run('docker', ['image', 'inspect', pinnedId, '--format', '{{join .RepoTags " "}}']).split(/\s+/).filter(Boolean);
+  const fromRef = tags.find((tag) => tag.startsWith(base.tagPrefix)) ?? tags.find((tag) => tag.startsWith(`${base.repo}:`)) ?? tags[0];
+  if (!fromRef) throw new Error(`the pinned ${base.key} base ${pinnedId} carries no tag to build FROM; tag it first`);
   const resolved = run('docker', ['image', 'inspect', fromRef, '--format', '{{.Id}}']);
   if (resolved !== pinnedId) throw new Error(`${fromRef} resolves to ${resolved || 'nothing'}, not the pinned ${pinnedId}`);
 
@@ -170,7 +174,7 @@ function rebuildBase(entry, sha) {
   fs.writeFileSync(recipe, `${base.recipe(fromRef, s8).join('\n')}\n`, 'ascii');
 
   // 3. build (several minutes for the backend: npm ci and the voice models)
-  console.log(`Rebuilding ${base.key} base ${newTag} FROM ${fromRef.slice(0, base.repo.length + 20)}... (${path.basename(ctx)})`);
+  console.log(`Rebuilding ${base.key} base ${newTag} FROM ${fromRef} (= ${pinnedId.slice(0, 19)}..., ${path.basename(ctx)})`);
   const build = spawnSync('docker', ['build', '--file', recipe, '--tag', newTag, ctx], { stdio: 'inherit' });
   if (build.status !== 0) throw new Error(`docker build of ${newTag} failed; nothing else was written`);
 
