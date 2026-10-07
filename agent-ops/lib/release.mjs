@@ -3,10 +3,13 @@
 //   --execute                 perform it; default is a dry run
 // Gates: toolkit integrity, origin/master == sha, the merged PR's required checks all SUCCESS,
 // single-flight lock, reviewed env changes applied at most once. Audited; result raised to the inbox.
+// Before the image build, the base images are brought level with the commit's lockfiles when
+// they differ (rebuild-bases.mjs), so a dependency pin no longer needs a hand-run script.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { HUB_REPO, OPS_ROOT, STATE_DIR, acquireLock, assertToolkitIntegrity, audit, notifyInbox, run } from './common.mjs';
+import { ensureBases } from './rebuild-bases.mjs';
 
 const GH_REPO = 'VACSO-ORG/vacso-hub';
 const argv = process.argv.slice(2);
@@ -60,6 +63,9 @@ try {
     if (others) throw new Error(`another release is running (pids ${others.split(/\s+/).join(', ')}); wait for it to finish`);
     release = acquireLock('hub-release', 3 * 60 * 60 * 1000);
   }
+  // The bases first: a lockfile change rebuilds the base that carries it and writes the next
+  // builder, which the driver below picks up as the newest. A dry run only says what would happen.
+  const bases = ensureBases(sha, execute);
   const psArgs = ['-NoProfile', '-File', path.join(OPS_ROOT, 'agent-ops', 'lib', 'activate-hub-release.ps1'), '-NewSha', sha];
   if (env) psArgs.push('-EnvChangesFile', env.file);
   if (execute) psArgs.push('-Execute');
@@ -71,10 +77,10 @@ try {
       fs.mkdirSync(path.dirname(env.applied), { recursive: true });
       fs.writeFileSync(env.applied, JSON.stringify({ ...env.spec, appliedIn: sha, appliedAt: new Date().toISOString() }, null, 2));
     }
-    audit('release-hub', { outcome: 'released', sha, pr: ci.pr, env: env?.spec.id ?? null, minutes: Math.round((Date.now() - started) / 60000) });
+    audit('release-hub', { outcome: 'released', sha, pr: ci.pr, env: env?.spec.id ?? null, basesRebuilt: bases.rebuilt.map((b) => b.base), minutes: Math.round((Date.now() - started) / 60000) });
     await notifyInbox({
       title: `Hub released: ${sha.slice(0, 8)} (PR #${ci.pr})`,
-      description: `Local Hub on vacsoserver now runs ${sha}.${env ? ` Env changes applied: ${env.spec.id}.` : ''}`,
+      description: `Local Hub on vacsoserver now runs ${sha}.${env ? ` Env changes applied: ${env.spec.id}.` : ''}${bases.rebuilt.length ? ` Base images rebuilt for the new lockfiles: ${bases.rebuilt.map((b) => b.tag).join(', ')}.` : ''}`,
       dedupKey: `agent-ops:release:${sha}`, priority: 'low',
     });
   } else {
