@@ -28,6 +28,7 @@ export const RECOVERY = 'C:\\Users\\oscar\\AppData\\Local\\VACSO\\recovery\\rebo
 const BASES = [
   {
     key: 'backend',
+    repo: 'vacso-hub-reboot-repair',
     tagPrefix: 'vacso-hub-reboot-repair:lockfile-',
     pinPattern: /const backBase='vacso-hub-reboot-repair@(sha256:[0-9a-f]{64})';/,
     manifests: ['package.json', 'package-lock.json', 'server/package.json'],
@@ -53,6 +54,7 @@ const BASES = [
   },
   {
     key: 'mcp',
+    repo: 'vacso-hub-consolidated-mcp',
     tagPrefix: 'vacso-hub-consolidated-mcp:lockfile-',
     pinPattern: /const mcpBase='(sha256:[0-9a-f]{64})';/,
     manifests: ['mcp-server/package.json', 'mcp-server/package-lock.json'],
@@ -136,10 +138,22 @@ function rebuildBase(entry, sha) {
   const s8 = sha.slice(0, 8);
   const newTag = `${base.tagPrefix}${s8}`;
   if (run('docker', ['images', '--quiet', newTag])) throw new Error(`image ${newTag} already exists; inspect it rather than rebuilding over it`);
-  const ctx = path.join(RECOVERY, base.contextDir(s8));
+  // A failed attempt leaves its context and recipe in the recovery folder as
+  // evidence (never edited, never removed); the retry takes the next name.
+  let ctx = path.join(RECOVERY, base.contextDir(s8));
+  for (let attempt = 2; fs.existsSync(ctx) || fs.existsSync(`${ctx}.Dockerfile`); attempt += 1) {
+    ctx = path.join(RECOVERY, `${base.contextDir(s8)}.attempt${attempt}`);
+  }
   const recipe = `${ctx}.Dockerfile`;
   refuseIfExists(ctx);
   refuseIfExists(recipe);
+
+  // FROM by repository digest, which Docker resolves from the local store and
+  // which a retagged image cannot satisfy. `FROM sha256:<id>` is read by Docker
+  // as a Docker Hub repository called "sha256" (first run, 8 Oct 2026).
+  const fromRef = `${base.repo}@${pinnedId}`;
+  const resolved = run('docker', ['image', 'inspect', fromRef, '--format', '{{.Id}}']);
+  if (resolved !== pinnedId) throw new Error(`${fromRef} resolves to ${resolved || 'nothing'}, not the pinned ${pinnedId}`);
 
   // 1. the manifests, byte for byte, in the layout the recipe COPYs
   fs.mkdirSync(ctx, { recursive: true });
@@ -153,10 +167,10 @@ function rebuildBase(entry, sha) {
   }
 
   // 2. the recipe, FROM the pinned base by id so a retagged image cannot stand in
-  fs.writeFileSync(recipe, `${base.recipe(pinnedId, s8).join('\n')}\n`, 'ascii');
+  fs.writeFileSync(recipe, `${base.recipe(fromRef, s8).join('\n')}\n`, 'ascii');
 
   // 3. build (several minutes for the backend: npm ci and the voice models)
-  console.log(`Rebuilding ${base.key} base ${newTag} FROM ${pinnedId.slice(0, 19)}...`);
+  console.log(`Rebuilding ${base.key} base ${newTag} FROM ${fromRef.slice(0, base.repo.length + 20)}... (${path.basename(ctx)})`);
   const build = spawnSync('docker', ['build', '--file', recipe, '--tag', newTag, ctx], { stdio: 'inherit' });
   if (build.status !== 0) throw new Error(`docker build of ${newTag} failed; nothing else was written`);
 
