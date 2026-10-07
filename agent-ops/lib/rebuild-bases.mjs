@@ -137,7 +137,21 @@ function rebuildBase(entry, sha) {
   const { base, pinnedId } = entry;
   const s8 = sha.slice(0, 8);
   const newTag = `${base.tagPrefix}${s8}`;
-  if (run('docker', ['images', '--quiet', newTag])) throw new Error(`image ${newTag} already exists; inspect it rather than rebuilding over it`);
+  if (run('docker', ['images', '--quiet', newTag])) {
+    // A base built by a run that was cut off after the build (8 Oct 2026: the
+    // process was stopped for memory while the daemon finished the image) is
+    // adopted when it verifies exactly as a fresh build would; anything else
+    // is refused, never rebuilt over.
+    const existingId = run('docker', ['image', 'inspect', newTag, '--format', '{{.Id}}']);
+    for (const manifest of base.manifests) {
+      const want = sha256(commitFileBytes(sha, manifest));
+      const have = imageFileSha(existingId, imagePathFor(base, manifest));
+      if (want !== have) throw new Error(`image ${newTag} already exists and ${manifest} inside it (${have}) is not the commit's (${want}); inspect it rather than rebuilding over it`);
+    }
+    console.log(`Adopting ${base.key} base ${newTag} (${existingId.slice(0, 19)}...): already built, manifests verified against ${s8}.`);
+    audit('rebuild-bases', { outcome: 'adopted', sha, base: base.key, tag: newTag, id: existingId });
+    return { newTag, newId: existingId };
+  }
   // A failed attempt leaves its context and recipe in the recovery folder as
   // evidence (never edited, never removed); the retry takes the next name.
   let ctx = path.join(RECOVERY, base.contextDir(s8));
