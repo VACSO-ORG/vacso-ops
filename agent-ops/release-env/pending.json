@@ -1,14 +1,12 @@
 {
-  "id": "2026-09-29-systems-review",
-  "reason": "Systems Review (Hub doc 1b975cac, tasks 1781/1782): Oscar approved 29 Sep 2026 turning the scheduler back on with paid execution kept off, telemetry on :8085 with its key, and the metered Anthropic key removed.",
-  "approvedBy": "Oscar, 29 Sep 2026",
+  "id": "2026-10-08-coding-worker-on",
+  "reason": "AI Hub plan f1345616 step 5 / 3.7: Oscar said 'turn on the coding worker' on 8 Oct 2026 after the give-work journey ran green on live. The claimer (AiWorkOrderWorker) takes software and webpage orders to the coding executor on the Claude bridge. The proposal executor stays off and no paid fallback is set, so every run is on the Max account.",
+  "approvedBy": "Oscar, 8 Oct 2026 (chat: 'turn on the coding worker')",
   "changes": [
-    ["--env-set", "server:SCHEDULER_ENABLED=true"],
-    ["--env-assert", "server:SCHEDULED_EXECUTION_ENABLED=false"],
-    ["--env-assert", "worker:SCHEDULED_EXECUTION_ENABLED=false"],
-    ["--env-set", "server:TELEMETRY_SERVICE_URL=http://host.docker.internal:8085"],
-    ["--env-set-from", "server:TELEMETRY_API_KEY=dotenv:C:\\Users\\oscar\\Projects\\vacso-telemetry-service\\.env:API_KEY"],
-    ["--env-unset", "server:ANTHROPIC_API_KEY"],
-    ["--env-unset", "worker:ANTHROPIC_API_KEY"]
+    ["--env-set", "server:AI_WORK_ORDER_WORKER_ENABLED=true"],
+    ["--env-assert", "server:EXECUTION_WORKER_ENABLED=false"],
+    ["--env-assert", "server:CLAUDE_CLI_ENABLED=true"],
+    ["--env-unset", "server:ALLOW_PAID_FALLBACK"],
+    ["--env-unset", "worker:ALLOW_PAID_FALLBACK"]
   ]
 }
