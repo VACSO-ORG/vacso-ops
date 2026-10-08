@@ -1,12 +1,19 @@
 {
   "id": "2026-10-08-coding-worker-on",
-  "reason": "AI Hub plan f1345616 step 5 / 3.7: Oscar said 'turn on the coding worker' on 8 Oct 2026 after the give-work journey ran green on live. The claimer (AiWorkOrderWorker) takes software and webpage orders to the coding executor on the Claude bridge. The proposal executor stays off and no paid fallback is set, so every run is on the Max account.",
+  "reason": "AI Hub plan f1345616 step 5 / 3.7: Oscar said 'turn on the coding worker' on 8 Oct 2026 after the give-work journey ran green on live. The claimer (AiWorkOrderWorker) takes software and webpage orders to the coding executor on the Claude bridge. The proposal executor stays off and no paid fallback is set, so every run is on the Max account. ALLOW_PAID_FALLBACK is not set on either container (verified by the driver's fail-closed refusal on 9 Oct), so no unset is needed.",
   "approvedBy": "Oscar, 8 Oct 2026 (chat: 'turn on the coding worker')",
   "changes": [
-    ["--env-set", "server:AI_WORK_ORDER_WORKER_ENABLED=true"],
-    ["--env-assert", "server:EXECUTION_WORKER_ENABLED=false"],
-    ["--env-assert", "server:CLAUDE_CLI_ENABLED=true"],
-    ["--env-unset", "server:ALLOW_PAID_FALLBACK"],
-    ["--env-unset", "worker:ALLOW_PAID_FALLBACK"]
+    [
+      "--env-set",
+      "server:AI_WORK_ORDER_WORKER_ENABLED=true"
+    ],
+    [
+      "--env-assert",
+      "server:EXECUTION_WORKER_ENABLED=false"
+    ],
+    [
+      "--env-assert",
+      "server:CLAUDE_CLI_ENABLED=true"
+    ]
   ]
 }
