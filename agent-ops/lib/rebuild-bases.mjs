@@ -31,7 +31,18 @@ const BASES = [
     repo: 'vacso-hub-reboot-repair',
     tagPrefix: 'vacso-hub-reboot-repair:lockfile-',
     pinPattern: /const backBase='vacso-hub-reboot-repair@(sha256:[0-9a-f]{64})';/,
-    manifests: ['package.json', 'package-lock.json', 'server/package.json'],
+    // Every workspace manifest, not just the server's: npm ci checks ALL of them
+    // against the lockfile, and a stale client/package.json left in the base
+    // (it still named firebase) failed release 25 on 11 Oct 2026.
+    manifests: [
+      'package.json',
+      'package-lock.json',
+      'server/package.json',
+      'client/package.json',
+      'packages/contracts/package.json',
+      'services/claude-bridge/package.json',
+      'services/telemetry/package.json',
+    ],
     imageRoot: '/opt/hub',
     contextDir: (s8) => `base-rebuild-${s8}`,
     recipe: (fromTag, s8) => [
@@ -43,6 +54,10 @@ const BASES = [
       'USER root',
       'COPY --chown=appuser:appuser package.json package-lock.json /opt/hub/',
       'COPY --chown=appuser:appuser server/package.json /opt/hub/server/package.json',
+      'COPY --chown=appuser:appuser client/package.json /opt/hub/client/package.json',
+      'COPY --chown=appuser:appuser packages/contracts/package.json /opt/hub/packages/contracts/package.json',
+      'COPY --chown=appuser:appuser services/claude-bridge/package.json /opt/hub/services/claude-bridge/package.json',
+      'COPY --chown=appuser:appuser services/telemetry/package.json /opt/hub/services/telemetry/package.json',
       'RUN cd /opt/hub && npm ci --workspace server --include-workspace-root=false --no-audit --no-fund',
       'RUN mkdir -p /opt/hub/node_modules/@livekit/agents-plugin-livekit/node_modules/@huggingface/transformers/.cache \\',
       ' && chown appuser:appuser /opt/hub/node_modules/@livekit/agents-plugin-livekit/node_modules/@huggingface/transformers/.cache',
